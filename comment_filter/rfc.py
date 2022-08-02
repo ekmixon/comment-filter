@@ -76,19 +76,12 @@ def parse_line(lang, state, code_only=False, keep_tokens=True):
     if state.in_literal:
         # Parsing a string literal.
         cnts, state = finish_string_literal(state.in_literal, state)
-        if code_only:
-            rest_of_decl = cnts
-        else:
-            rest_of_decl = clear_line(cnts)
+        rest_of_decl = cnts if code_only else clear_line(cnts)
     elif state.multi_end_stack:
         # If there is state, we assume it is because we have parsed
         # the start of a multiline comment, but haven't found the end.
         cmt, state = finish_multiline_comment(lang, state, keep_tokens)
-        if code_only:
-            rest_of_decl = clear_line(cmt)
-        else:
-            rest_of_decl = cmt
-
+        rest_of_decl = clear_line(cmt) if code_only else cmt
     if state.in_literal or state.multi_end_stack:
         return rest_of_decl, state
 
@@ -127,17 +120,16 @@ def parse_declarations(lang, state, code_only=False, keep_tokens=True):
         if not state.multi_end_stack:
             # Continue looking for declarations.
             line, state = parse_declarations(lang, state, code_only, keep_tokens)
-        if code_only:
-            line = code + clear_line(comment) + clear_line(comment2) + line
-        else:
-            line = clear_line(code) + comment + comment2 + line
+        line = (
+            code + clear_line(comment) + clear_line(comment2) + line
+            if code_only
+            else clear_line(code) + comment + comment2 + line
+        )
+
         return line, state
     else:
         state.line = ''
-        if code_only:
-            return code, state
-        else:
-            return clear_line(code), state
+        return (code, state) if code_only else (clear_line(code), state)
 
 
 def parse_code(lang, state):
@@ -336,8 +328,7 @@ def finish_multiline_comment(lang, state, keep_tokens=True):
     else:
         cmt = ''
 
-    line = state.line
-    if line:
+    if line := state.line:
         if line.startswith(multi_end):
             i = len(multi_end)
             state.multi_end_stack.pop()
@@ -392,19 +383,14 @@ def index_of_first_found(s, xs):
     Return the index of the first string from xs found in s.
     """
     regex = '|'.join(map(re.escape, xs))
-    m = re.search(regex, s)
-    if m:
-        return m.start()
-    else:
-        return -1
+    return m.start() if (m := re.search(regex, s)) else -1
 
 
 def clear_line(line):
     """
     Return a string where each non-newline character is replaced with a space.
     """
-    sep = get_linesep(line)
-    if sep:
+    if sep := get_linesep(line):
         return ' ' * (len(line) - len(sep)) + sep
     else:
         return ' ' * len(line)
